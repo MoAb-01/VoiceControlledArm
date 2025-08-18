@@ -1,0 +1,46 @@
+import sounddevice as sd
+import numpy as np
+from scipy.signal import resample
+from vosk import Model, KaldiRecognizer
+import json
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+def main():
+    model_paths = {
+        'english': '/home/pi/Downloads/vosk-model-small-en-us-0.15',
+        'arabic':  '/home/pi/Downloads/vosk-model-ar-0.22-linto-1.1.0',
+        'turkish': '/home/pi/Downloads/vosk-model-small-tr-0.3'
+    }
+
+    choice = input("Which language would you like to speak? (English/Arabic/Turkish): ").strip().lower()
+    if choice not in model_paths:
+        print("Invalid choice. Please run again and pick English, Arabic, or Turkish.")
+        return
+
+    print(f"Loading {choice.capitalize()} model...")
+    model = Model(model_paths[choice])
+    rec = KaldiRecognizer(model, 16000)  # Corrected to 16000
+
+    DURATION = 3  # seconds
+    print(f"Please speak now in {choice.capitalize()} (recording {DURATION} seconds)...")
+    audio = sd.rec(int(DURATION * 48000), samplerate=48000, channels=1, dtype='int16', device=0)
+    sd.wait()
+
+    # Resample from 48000 Hz to 16000 Hz
+    audio_resampled = resample(audio.flatten(), int(DURATION * 16000)).astype(np.int16)
+
+    # Vosk expects bytes input
+    data = audio_resampled.tobytes()
+    if rec.AcceptWaveform(data):
+        result = json.loads(rec.Result())
+    else:
+        result = json.loads(rec.FinalResult())
+
+    print("\n=== Recognition Result ===")
+    print("You said:", result.get("text", ""))
+
+if __name__ == "__main__":
+    main()
